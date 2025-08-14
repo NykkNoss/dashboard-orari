@@ -1,6 +1,5 @@
 "use client";
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
