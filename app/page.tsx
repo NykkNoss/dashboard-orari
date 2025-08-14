@@ -38,9 +38,9 @@ export default function Home() {
       <div className="absolute inset-0 bg-black/40" />
 
       {/* card centrale */}
-      <div className="relative z-10 w-[min(92vw,520px)] bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-white/50 p-6 text-gray-900">
-        <h1 className="text-2xl font-bold mb-2">Benvenuto Nico</h1>
-        <p className="text-sm text-gray-600 mb-5">
+      <div className="relative z-10 w-[min(92vw,520px)] bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-white/50 p-6 text-gray-900 text-center">
+        <h1 className="text-2xl font-bold mb-2">Benvenuto</h1>
+        <p className="text-sm text-gray-600 mb-5 text-center">
           Accedi per entrare nella tua dashboard.
         </p>
 
