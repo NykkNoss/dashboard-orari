@@ -1,5 +1,5 @@
 "use client";
-export const dynamic = "force-dynamic"; 
+export const dynamic = "force-dynamic";
 
 import RequireAuth from "@/components/RequireAuth";
 import WeeklyTable from "@/components/WeeklyTable";
@@ -43,6 +43,11 @@ export default function DashboardPage() {
     localStorage.setItem("dashboard_notes", "");
   }
 
+  // stile condiviso per i bottoni “corti ma alti uguali”
+  const btnClass =
+    "block w-[190px] px-4 py-3 rounded-2xl border border-gray-300 shadow-sm " +
+    "bg-white/90 backdrop-blur hover:bg-white text-lg font-semibold text-gray-900 text-center";
+
   return (
     <RequireAuth>
       {/* Wrapper con sfondo + overlay */}
@@ -68,46 +73,97 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Colonna destra: pulsanti sopra, Note sotto */}
-          <div className="grid items-start gap-4">
-            <div className="w-full lg:w-1/2 max-w-[720px] grid gap-3">
-              {/* Timbrature */}
+          {/* Colonna destra: due colonne -> sinistra bottoni (stretti), destra Note (grande) */}
+          <div className="grid gap-4 lg:grid-cols-[340px_1fr] items-start">
+            {/* Colonna bottoni */}
+            <div className="grid gap-3 content-start">
+              {/* Timbrature (invariato, solo larghezza ridotta) */}
               <a
                 href="https://docs.google.com/spreadsheets/d/1Pbe4YP4eRCt-B9W2yHJ2lwHnv-eDjDGWw9oDlV6ESCQ/edit?gid=6862706#gid=6862706"
                 target="_blank"
                 rel="noreferrer"
-                className="block w-full px-4 py-3 rounded-2xl border border-gray-300 shadow-sm bg-white/90 backdrop-blur hover:bg-white text-lg font-semibold text-gray-900 text-center"
+                className={btnClass}
               >
                 Timbrature
               </a>
 
-              {/* Switch Settimana (stesso stile) */}
+              {/* Email */}
+              <a
+                href="https://outlook.live.com/mail/0/"
+                target="_blank"
+                rel="noreferrer"
+                className={btnClass}
+              >
+                Email
+              </a>
+
+              {/* Zucchetti */}
+              <a
+                href="https://saas.hrzucchetti.it/hrpitalianex/jsp/login.jsp"
+                target="_blank"
+                rel="noreferrer"
+                className={btnClass}
+              >
+                Zucchetti
+              </a>
+
+              {/* Help Desk */}
+              <a
+                href="https://helpdesk.iegexpo.it/Login.jsp?navLanguage=it-IT"
+                target="_blank"
+                rel="noreferrer"
+                className={btnClass}
+              >
+                Help Desk
+              </a>
+
+              {/* Edenred */}
+              <a
+                href="https://beneficiari.edenred.it/mfe-nup-welfare/welfare-home"
+                target="_blank"
+                rel="noreferrer"
+                className={btnClass}
+              >
+                Edenred
+              </a>
+
+              {/* Google Drive */}
+              <a
+                href="https://drive.google.com/drive/folders/1YRvmEwthcitEryaAmJVTI6If0RyYUSnm?hl=it"
+                target="_blank"
+                rel="noreferrer"
+                className={btnClass}
+              >
+                Google Drive
+              </a>
+
+              {/* Switch Settimana (invariato, stesso stile bottoni) */}
               <button
                 onClick={switchWeeks}
-                className="block w-full px-4 py-3 rounded-2xl border border-gray-300 shadow-sm bg-white/90 backdrop-blur hover:bg-white text-lg font-semibold text-gray-900 text-center"
+                className={btnClass}
                 title="Copia 'Prossima settimana' in 'Settimana corrente' e svuota 'Prossima settimana'"
               >
                 Switch Settimana
               </button>
+            </div>
 
-              {/* Note con bottone 'Pulisci' nell'intestazione */}
-              <div className="bg-white/90 backdrop-blur text-gray-900 border border-gray-200 rounded-2xl overflow-hidden shadow-md">
-                <div className="px-3 py-2 bg-gray-100/90 font-semibold flex justify-between items-center">
-                  <span>Note:</span>
-                  <button
-                    onClick={clearNotes}
-                    className="px-2 py-1 text-sm border border-gray-400 rounded hover:bg-gray-200"
-                  >
-                    Pulisci
-                  </button>
-                </div>
-                <textarea
-                  className="w-full h-[520px] p-3 outline-none bg-transparent"
-                  placeholder="Scrivi qui…"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
+            {/* Colonna Note (a destra, stessa dimensione “grande”) */}
+            <div className="bg-white/90 backdrop-blur text-gray-900 border border-gray-200 rounded-2xl overflow-hidden shadow-md">
+              <div className="px-3 py-2 bg-gray-100/90 font-semibold flex justify-between items-center">
+                <span>Note:</span>
+                <button
+                  onClick={clearNotes}
+                  className="px-2 py-1 text-sm border border-gray-400 rounded hover:bg-gray-200"
+                >
+                  Pulisci
+                </button>
               </div>
+              <textarea
+                className="w-full h-[520px] p-3 outline-none bg-transparent"
+                placeholder="Scrivi qui…"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
             </div>
           </div>
         </main>
