@@ -3,13 +3,19 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { getFirebaseAuth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
   const router = useRouter();
 
   async function handleLogin() {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      console.error("Firebase Auth non disponibile (SSR o init non completato)");
+      return;
+    }
+
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
