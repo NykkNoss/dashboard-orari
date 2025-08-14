@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
+export const revalidate = 0; 
 
 import RequireAuth from "@/components/RequireAuth";
 import WeeklyTable from "@/components/WeeklyTable";
