@@ -44,7 +44,7 @@ export default function WeeklyTable({
     { label: "Domenica", a: "", b: "", c: "", d: "" },
   ];
 
-  // ⬇️ Legge SUBITO da localStorage (solo al primo render sul client)
+  // cache locale
   const [rows, setRows] = useState<DayRow[]>(() => {
     if (typeof window === "undefined") return initial;
     try {
@@ -54,11 +54,29 @@ export default function WeeklyTable({
     return initial;
   });
 
-  // Stato auth per sapere dove salvare su Firestore
   const [uid, setUid] = useState<string | null>(null);
   const [loadedFromRemote, setLoadedFromRemote] = useState(false);
 
-  // ⬇️ Sub a auth e caricamento iniziale da Firestore (/users/{uid}/private/{storageKey})
+  // ---- funzione riusabile per (ri)caricare dal remoto
+  const loadFromFirestore = async (theUid: string) => {
+    try {
+      const db = getFirestoreDb();
+      if (!db) throw new Error("Firestore non inizializzato");
+      const ref = doc(db, "users", theUid, "private", storageKey);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = snap.data()?.data as DayRow[] | undefined;
+        if (data && Array.isArray(data)) {
+          setRows(data);
+          try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch {}
+        }
+      }
+    } catch (e) {
+      console.error("WeeklyTable load (Firestore):", e);
+    }
+  };
+
+  // auth + primo load
   useEffect(() => {
     const auth = getFirebaseAuth();
     if (!auth) return;
@@ -70,62 +88,47 @@ export default function WeeklyTable({
         return;
       }
       setUid(u.uid);
-
-      // carica una volta dal doc remoto
-      try {
-        const db = getFirestoreDb();
-        if (!db) throw new Error("Firestore non inizializzato");
-        const ref = doc(db, "users", u.uid, "private", storageKey);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = snap.data()?.data as DayRow[] | undefined;
-          if (data && Array.isArray(data)) {
-            setRows(data);
-            // aggiorna anche la cache locale
-            try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch {}
-          }
-        }
-      } catch (e) {
-        console.error("WeeklyTable load (Firestore):", e);
-      } finally {
-        setLoadedFromRemote(true);
-      }
+      await loadFromFirestore(u.uid);
+      setLoadedFromRemote(true);
     });
 
     return () => unsub();
   }, [storageKey]);
 
-  // ⬇️ Salva ogni volta che rows cambia (cache locale)
+  // ascolta evento di reload esterno (usato dallo switch)
   useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(rows));
-    } catch {}
+    const handler = async (ev: Event) => {
+      const e = ev as CustomEvent<{ docId?: string }>;
+      if (!uid) return;
+      if (e.detail?.docId && e.detail.docId !== storageKey) return;
+      await loadFromFirestore(uid);
+    };
+    window.addEventListener("weeklytable:reload", handler as EventListener);
+    return () => window.removeEventListener("weeklytable:reload", handler as EventListener);
+  }, [uid, storageKey]);
+
+  // salva cache locale
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(rows)); } catch {}
   }, [rows, storageKey]);
 
-  // ⬇️ Salva anche su Firestore (debounced) se autenticato
+  // autosave remoto (debounced)
   useEffect(() => {
-    if (!uid) return;
-    // evita di sparare una scrittura prima di avere fatto il primo load remoto
-    if (!loadedFromRemote) return;
-
-    const timer = setTimeout(async () => {
+    if (!uid || !loadedFromRemote) return;
+    const t = setTimeout(async () => {
       try {
         const db = getFirestoreDb();
         if (!db) return;
         const ref = doc(db, "users", uid, "private", storageKey);
-        await setDoc(
-          ref,
-          { data: rows, updatedAt: serverTimestamp() },
-          { merge: true }
-        );
+        await setDoc(ref, { data: rows, updatedAt: serverTimestamp() }, { merge: true });
       } catch (e) {
         console.error("WeeklyTable save (Firestore):", e);
       }
-    }, 600); // debounce semplice
-
-    return () => clearTimeout(timer);
+    }, 600);
+    return () => clearTimeout(t);
   }, [rows, uid, storageKey, loadedFromRemote]);
 
+  // --- calcoli
   const totals = useMemo(
     () =>
       rows.map((r) => {

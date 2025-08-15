@@ -1,0 +1,50 @@
+"use client";
+
+import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+
+type DayRow = { label: string; a: string; b: string; c: string; d: string };
+
+const emptyWeek: DayRow[] = [
+  { label: "Lunedì", a: "", b: "", c: "", d: "" },
+  { label: "Martedì", a: "", b: "", c: "", d: "" },
+  { label: "Mercoledì", a: "", b: "", c: "", d: "" },
+  { label: "Giovedì", a: "", b: "", c: "", d: "" },
+  { label: "Venerdì", a: "", b: "", c: "", d: "" },
+  { label: "Sabato", a: "", b: "", c: "", d: "" },
+  { label: "Domenica", a: "", b: "", c: "", d: "" },
+];
+
+export async function switchWeeks() {
+  const auth = getFirebaseAuth();
+  const db = getFirestoreDb();
+  if (!auth || !db) throw new Error("Auth/DB non inizializzati");
+  const user = auth.currentUser;
+  if (!user) throw new Error("Non autenticato");
+  const uid = user.uid;
+
+  const nextRef = doc(db, "users", uid, "private", "settimanaProssima");
+  const currRef = doc(db, "users", uid, "private", "settimanaCorrente");
+
+  const snap = await getDoc(nextRef);
+  const nextData: DayRow[] = (snap.exists() && Array.isArray(snap.data().data))
+    ? (snap.data().data as DayRow[])
+    : emptyWeek;
+
+  await Promise.all([
+    setDoc(currRef, { data: nextData, updatedAt: serverTimestamp() }, { merge: true }),
+    setDoc(nextRef, { data: emptyWeek, updatedAt: serverTimestamp() }, { merge: true }),
+  ]);
+
+  // aggiorna cache locale
+  try {
+    localStorage.setItem("settimanaCorrente", JSON.stringify(nextData));
+    localStorage.setItem("settimanaProssima", JSON.stringify(emptyWeek));
+  } catch {}
+
+  // avvisa entrambe le tabelle di ricaricare
+  const emit = (docId: string) =>
+    window.dispatchEvent(new CustomEvent("weeklytable:reload", { detail: { docId } }));
+  emit("settimanaCorrente");
+  emit("settimanaProssima");
+}
