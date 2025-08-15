@@ -1,9 +1,10 @@
 // lib/firebase.ts
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, enableIndexedDbPersistence, type Firestore } from "firebase/firestore";
 
-let app;
+let app: FirebaseApp;
+
 if (!getApps().length) {
   app = initializeApp({
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -17,12 +18,16 @@ if (!getApps().length) {
   app = getApp();
 }
 
-export function getFirebaseAuth() {
-  try { return getAuth(app); } catch { return null; }
+export function getFirebaseAuth(): Auth | null {
+  try {
+    return getAuth(app);
+  } catch {
+    return null;
+  }
 }
 
-let _db: ReturnType<typeof getFirestore> | null = null;
-export function getFirestoreDb() {
+let _db: Firestore | null = null;
+export function getFirestoreDb(): Firestore | null {
   if (_db) return _db;
   try {
     const db = getFirestore(app);
