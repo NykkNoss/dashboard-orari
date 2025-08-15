@@ -1,5 +1,8 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase";
 
 type DayRow = { label: string; a: string; b: string; c: string; d: string };
 
@@ -29,7 +32,7 @@ export default function WeeklyTable({
   storageKey,
 }: {
   title: string;
-  storageKey: string;
+  storageKey: string; // usato anche come docId su Firestore
 }) {
   const initial: DayRow[] = [
     { label: "Lunedì", a: "", b: "", c: "", d: "" },
@@ -51,12 +54,77 @@ export default function WeeklyTable({
     return initial;
   });
 
-  // ⬇️ Salva ogni volta che rows cambia
+  // Stato auth per sapere dove salvare su Firestore
+  const [uid, setUid] = useState<string | null>(null);
+  const [loadedFromRemote, setLoadedFromRemote] = useState(false);
+
+  // ⬇️ Sub a auth e caricamento iniziale da Firestore (/users/{uid}/private/{storageKey})
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setUid(null);
+        setLoadedFromRemote(true);
+        return;
+      }
+      setUid(u.uid);
+
+      // carica una volta dal doc remoto
+      try {
+        const db = getFirestoreDb();
+        if (!db) throw new Error("Firestore non inizializzato");
+        const ref = doc(db, "users", u.uid, "private", storageKey);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const data = snap.data()?.data as DayRow[] | undefined;
+          if (data && Array.isArray(data)) {
+            setRows(data);
+            // aggiorna anche la cache locale
+            try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch {}
+          }
+        }
+      } catch (e) {
+        console.error("WeeklyTable load (Firestore):", e);
+      } finally {
+        setLoadedFromRemote(true);
+      }
+    });
+
+    return () => unsub();
+  }, [storageKey]);
+
+  // ⬇️ Salva ogni volta che rows cambia (cache locale)
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(rows));
     } catch {}
   }, [rows, storageKey]);
+
+  // ⬇️ Salva anche su Firestore (debounced) se autenticato
+  useEffect(() => {
+    if (!uid) return;
+    // evita di sparare una scrittura prima di avere fatto il primo load remoto
+    if (!loadedFromRemote) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const db = getFirestoreDb();
+        if (!db) return;
+        const ref = doc(db, "users", uid, "private", storageKey);
+        await setDoc(
+          ref,
+          { data: rows, updatedAt: serverTimestamp() },
+          { merge: true }
+        );
+      } catch (e) {
+        console.error("WeeklyTable save (Firestore):", e);
+      }
+    }, 600); // debounce semplice
+
+    return () => clearTimeout(timer);
+  }, [rows, uid, storageKey, loadedFromRemote]);
 
   const totals = useMemo(
     () =>
