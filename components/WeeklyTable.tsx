@@ -1,10 +1,21 @@
 "use client";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase";
 
 type DayRow = { label: string; a: string; b: string; c: string; d: string };
+
+const initialWeek: DayRow[] = [
+  { label: "Lunedì", a: "", b: "", c: "", d: "" },
+  { label: "Martedì", a: "", b: "", c: "", d: "" },
+  { label: "Mercoledì", a: "", b: "", c: "", d: "" },
+  { label: "Giovedì", a: "", b: "", c: "", d: "" },
+  { label: "Venerdì", a: "", b: "", c: "", d: "" },
+  { label: "Sabato", a: "", b: "", c: "", d: "" },
+  { label: "Domenica", a: "", b: "", c: "", d: "" }
+];
 
 function parseToMinutes(v: string): number {
   const s = (v ?? "").trim();
@@ -20,6 +31,7 @@ function parseToMinutes(v: string): number {
   const mm = Math.round((num - hh) * 60);
   return hh * 60 + mm;
 }
+
 function minutesToHM(min: number): string {
   const m = Math.max(min, 0);
   const h = Math.floor(m / 60);
@@ -27,37 +39,26 @@ function minutesToHM(min: number): string {
   return `${h}:${String(mm).padStart(2, "0")}`;
 }
 
+function loadLocalRows(storageKey: string) {
+  if (typeof window === "undefined") return initialWeek;
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) return JSON.parse(raw) as DayRow[];
+  } catch {}
+  return initialWeek;
+}
+
 export default function WeeklyTable({
   title,
-  storageKey,
+  storageKey
 }: {
   title: string;
-  storageKey: string; // usato anche come docId su Firestore
+  storageKey: string;
 }) {
-  const initial: DayRow[] = [
-    { label: "Lunedì", a: "", b: "", c: "", d: "" },
-    { label: "Martedì", a: "", b: "", c: "", d: "" },
-    { label: "Mercoledì", a: "", b: "", c: "", d: "" },
-    { label: "Giovedì", a: "", b: "", c: "", d: "" },
-    { label: "Venerdì", a: "", b: "", c: "", d: "" },
-    { label: "Sabato", a: "", b: "", c: "", d: "" },
-    { label: "Domenica", a: "", b: "", c: "", d: "" },
-  ];
-
-  // cache locale
-  const [rows, setRows] = useState<DayRow[]>(() => {
-    if (typeof window === "undefined") return initial;
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) return JSON.parse(raw) as DayRow[];
-    } catch {}
-    return initial;
-  });
-
+  const [rows, setRows] = useState<DayRow[]>(() => loadLocalRows(storageKey));
   const [uid, setUid] = useState<string | null>(null);
   const [loadedFromRemote, setLoadedFromRemote] = useState(false);
 
-  // ---- funzione riusabile per (ri)caricare dal remoto
   const loadFromFirestore = useCallback(async (theUid: string) => {
     try {
       const db = getFirestoreDb();
@@ -68,7 +69,9 @@ export default function WeeklyTable({
         const data = snap.data()?.data as DayRow[] | undefined;
         if (data && Array.isArray(data)) {
           setRows(data);
-          try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch {}
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(data));
+          } catch {}
         }
       }
     } catch (e) {
@@ -76,7 +79,6 @@ export default function WeeklyTable({
     }
   }, [storageKey]);
 
-  // auth + primo load
   useEffect(() => {
     const auth = getFirebaseAuth();
     if (!auth) return;
@@ -95,7 +97,6 @@ export default function WeeklyTable({
     return () => unsub();
   }, [loadFromFirestore]);
 
-  // ascolta evento di reload esterno (usato dallo switch)
   useEffect(() => {
     const handler = async (ev: Event) => {
       const e = ev as CustomEvent<{ docId?: string }>;
@@ -107,12 +108,12 @@ export default function WeeklyTable({
     return () => window.removeEventListener("weeklytable:reload", handler as EventListener);
   }, [loadFromFirestore, uid, storageKey]);
 
-  // salva cache locale
   useEffect(() => {
-    try { localStorage.setItem(storageKey, JSON.stringify(rows)); } catch {}
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(rows));
+    } catch {}
   }, [rows, storageKey]);
 
-  // autosave remoto (debounced)
   useEffect(() => {
     if (!uid || !loadedFromRemote) return;
     const t = setTimeout(async () => {
@@ -128,22 +129,21 @@ export default function WeeklyTable({
     return () => clearTimeout(t);
   }, [rows, uid, storageKey, loadedFromRemote]);
 
-  // --- calcoli
   const totals = useMemo(
     () =>
       rows.map((r) => {
-        const a = parseToMinutes(r.a),
-          b = parseToMinutes(r.b),
-          c = parseToMinutes(r.c),
-          d = parseToMinutes(r.d);
+        const a = parseToMinutes(r.a);
+        const b = parseToMinutes(r.b);
+        const c = parseToMinutes(r.c);
+        const d = parseToMinutes(r.d);
         return Math.max(0, b - a) + Math.max(0, d - c);
       }),
     [rows]
   );
-  const grandTotal = totals.reduce((s, t) => s + t, 0);
+  const grandTotal = totals.reduce((sum, total) => sum + total, 0);
 
   const setCell = (i: number, key: "a" | "b" | "c" | "d", value: string) =>
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
+    setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, [key]: value } : row)));
 
   return (
     <div className="w-full max-w-lg bg-white text-gray-900 border border-gray-200 rounded-2xl shadow-md overflow-hidden">
@@ -162,15 +162,15 @@ export default function WeeklyTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.label} className={i % 2 ? "bg-gray-50" : "bg-white"}>
-              <td className="px-3 py-2 font-medium">{r.label}</td>
-              {(["a", "b", "c", "d"] as const).map((k) => (
-                <td key={k} className="px-2 py-2">
+          {rows.map((row, i) => (
+            <tr key={row.label} className={i % 2 ? "bg-gray-50" : "bg-white"}>
+              <td className="px-3 py-2 font-medium">{row.label}</td>
+              {(["a", "b", "c", "d"] as const).map((key) => (
+                <td key={key} className="px-2 py-2">
                   <input
                     className="w-16 text-center px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={r[k]}
-                    onChange={(e) => setCell(i, k, e.target.value)}
+                    value={row[key]}
+                    onChange={(event) => setCell(i, key, event.target.value)}
                   />
                 </td>
               ))}

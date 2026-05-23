@@ -3,18 +3,17 @@ export const dynamic = "force-dynamic";
 
 import RequireAuth from "@/components/RequireAuth";
 import WeeklyTable from "@/components/WeeklyTable";
-import { useDashboardSync } from "@/hooks/useDashboardSync"; // hook creato per Firestore sync
+import { emptyWeek, useDashboardSync } from "@/hooks/useDashboardSync";
 import { useEffect, useState } from "react";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 type DayRow = { label: string; a: string; b: string; c: string; d: string };
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
 
-  // Prendo UID utente autenticato
   useEffect(() => {
     const auth = getFirebaseAuth();
     if (!auth) return;
@@ -22,15 +21,12 @@ export default function DashboardPage() {
     return () => unsub();
   }, []);
 
-  // Hook di sync con Firestore (lasciamo gestire NOTE e refresh)
   const {
     notes,
     setNotes,
-    // switchWeeks: NON lo usiamo dall'hook, lo implementiamo qui per usare i key correnti
-    refreshBump, // per forzare il rerender di WeeklyTable (comunque facciamo anche un reload event)
+    refreshBump
   } = useDashboardSync(user?.uid ?? null);
 
-  // --- SWITCH SETTIMANA: copia week_next -> week_current e svuota week_next
   const switchWeeks = async () => {
     const auth = getFirebaseAuth();
     const db = getFirestoreDb();
@@ -38,6 +34,7 @@ export default function DashboardPage() {
       alert("Firestore/Auth non inizializzati.");
       return;
     }
+
     const u = auth.currentUser;
     if (!u) {
       alert("Devi essere loggato per usare lo switch.");
@@ -51,47 +48,27 @@ export default function DashboardPage() {
 
       const nextRef = doc(db, "users", uid, "private", nextKey);
       const currRef = doc(db, "users", uid, "private", currKey);
-
       const snap = await getDoc(nextRef);
-      const emptyWeek: DayRow[] = [
-        { label: "Lunedì", a: "", b: "", c: "", d: "" },
-        { label: "Martedì", a: "", b: "", c: "", d: "" },
-        { label: "Mercoledì", a: "", b: "", c: "", d: "" },
-        { label: "Giovedì", a: "", b: "", c: "", d: "" },
-        { label: "Venerdì", a: "", b: "", c: "", d: "" },
-        { label: "Sabato", a: "", b: "", c: "", d: "" },
-        { label: "Domenica", a: "", b: "", c: "", d: "" },
-      ];
+      const empty = emptyWeek();
 
       const nextData: DayRow[] =
         snap.exists() && Array.isArray(snap.data().data)
           ? (snap.data().data as DayRow[])
-          : emptyWeek;
+          : empty;
 
       await Promise.all([
-        setDoc(
-          currRef,
-          { data: nextData, updatedAt: serverTimestamp() },
-          { merge: true }
-        ),
-        setDoc(
-          nextRef,
-          { data: emptyWeek, updatedAt: serverTimestamp() },
-          { merge: true }
-        ),
+        setDoc(currRef, { data: nextData, updatedAt: serverTimestamp() }, { merge: true }),
+        setDoc(nextRef, { data: empty, updatedAt: serverTimestamp() }, { merge: true })
       ]);
 
-      // Aggiorna cache locale
       try {
         localStorage.setItem(currKey, JSON.stringify(nextData));
-        localStorage.setItem(nextKey, JSON.stringify(emptyWeek));
+        localStorage.setItem(nextKey, JSON.stringify(empty));
       } catch {}
 
-      // Forza il reload delle due tabelle (WeeklyTable ascolta questo evento)
       const emit = (docId: string) =>
-        window.dispatchEvent(
-          new CustomEvent("weeklytable:reload", { detail: { docId } })
-        );
+        window.dispatchEvent(new CustomEvent("weeklytable:reload", { detail: { docId } }));
+
       emit(currKey);
       emit(nextKey);
     } catch (e) {
@@ -113,7 +90,6 @@ export default function DashboardPage() {
         <div className="absolute inset-0 bg-black/20" />
 
         <main className="relative z-10 p-4 grid gap-6 lg:grid-cols-[520px_1fr]">
-          {/* Colonna sinistra: tabelle */}
           <div className="grid gap-6">
             <WeeklyTable
               key={`current-${refreshBump}`}
@@ -127,9 +103,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Colonna destra */}
           <div className="grid gap-4 lg:grid-cols-[340px_1fr] items-start">
-            {/* Bottoni */}
             <div className="grid gap-3 content-start">
               <a
                 href="https://docs.google.com/spreadsheets/d/1Pbe4YP4eRCt-B9W2yHJ2lwHnv-eDjDGWw9oDlV6ESCQ/edit?gid=6862706#gid=6862706"
@@ -188,7 +162,6 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Note */}
             <div className="bg-white/90 backdrop-blur text-gray-900 border border-gray-200 rounded-2xl overflow-hidden shadow-md">
               <div className="px-3 py-2 bg-gray-100/90 font-semibold flex justify-between items-center">
                 <span>Note:</span>

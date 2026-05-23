@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dashboard Ore",
-  description: "Dashboard personale per ore, note e link di lavoro"
+  title: "Dashboard Orari",
+  description: "Dashboard personale per orari, note e link di lavoro"
 };
 
 export default function RootLayout({
