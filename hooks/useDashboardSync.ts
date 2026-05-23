@@ -83,7 +83,7 @@ export function useDashboardSync(uid: string | null) {
   }, [db, uid]);
 
   // update helpers (debounced)
-  const scheduleSave = useCallback((docRef: any, next: Partial<DashboardDoc>) => {
+  const scheduleSave = useCallback((next: Partial<DashboardDoc>) => {
     if (!db || !uid) return;
     // merge locale
     latest.current = { ...(latest.current as DashboardDoc), ...next };
@@ -93,7 +93,7 @@ export function useDashboardSync(uid: string | null) {
     // debounce scrittura cloud
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      try { await updateDoc(doc(db, "users", uid, "private", "dashboard"), next as any); }
+      try { await updateDoc(doc(db, "users", uid, "private", "dashboard"), next); }
       catch {
         // se update fallisce su doc nuovo, prova setDoc merge
         await setDoc(doc(db, "users", uid, "private", "dashboard"), next, { merge: true });
@@ -102,21 +102,20 @@ export function useDashboardSync(uid: string | null) {
   }, [db, uid]);
 
   const setNotes = useCallback((val: string) => {
-    const cur = latest.current ?? { notes: "", week_current: emptyWeek(), week_next: emptyWeek() };
-    scheduleSave(null, { notes: val });
+    scheduleSave({ notes: val });
   }, [scheduleSave]);
 
   const setWeekCurrent = useCallback((arr: DayRow[]) => {
-    scheduleSave(null, { week_current: arr });
+    scheduleSave({ week_current: arr });
   }, [scheduleSave]);
 
   const setWeekNext = useCallback((arr: DayRow[]) => {
-    scheduleSave(null, { week_next: arr });
+    scheduleSave({ week_next: arr });
   }, [scheduleSave]);
 
   const switchWeeks = useCallback(() => {
     const cur = latest.current ?? { notes: "", week_current: emptyWeek(), week_next: emptyWeek() };
-    scheduleSave(null, { week_current: cur.week_next, week_next: emptyWeek() });
+    scheduleSave({ week_current: cur.week_next, week_next: emptyWeek() });
   }, [scheduleSave]);
 
   return {

@@ -74,6 +74,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
         }}
       >
         {user?.photoURL ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={user.photoURL}
             width={32}

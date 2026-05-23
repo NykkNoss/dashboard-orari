@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase";
@@ -58,7 +58,7 @@ export default function WeeklyTable({
   const [loadedFromRemote, setLoadedFromRemote] = useState(false);
 
   // ---- funzione riusabile per (ri)caricare dal remoto
-  const loadFromFirestore = async (theUid: string) => {
+  const loadFromFirestore = useCallback(async (theUid: string) => {
     try {
       const db = getFirestoreDb();
       if (!db) throw new Error("Firestore non inizializzato");
@@ -74,7 +74,7 @@ export default function WeeklyTable({
     } catch (e) {
       console.error("WeeklyTable load (Firestore):", e);
     }
-  };
+  }, [storageKey]);
 
   // auth + primo load
   useEffect(() => {
@@ -93,7 +93,7 @@ export default function WeeklyTable({
     });
 
     return () => unsub();
-  }, [storageKey]);
+  }, [loadFromFirestore]);
 
   // ascolta evento di reload esterno (usato dallo switch)
   useEffect(() => {
@@ -105,7 +105,7 @@ export default function WeeklyTable({
     };
     window.addEventListener("weeklytable:reload", handler as EventListener);
     return () => window.removeEventListener("weeklytable:reload", handler as EventListener);
-  }, [uid, storageKey]);
+  }, [loadFromFirestore, uid, storageKey]);
 
   // salva cache locale
   useEffect(() => {
