@@ -2,7 +2,10 @@
 export const dynamic = "force-dynamic";
 
 import RequireAuth from "@/components/RequireAuth";
-import { useEffect, useState } from "react";
+import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
 
 type ShiftRow = {
   date: string;
@@ -13,10 +16,17 @@ type ShiftRow = {
   endB: string;
 };
 
+type DashboardSyncDoc = {
+  activeWeek?: string;
+  weeks?: Record<string, ShiftRow[]>;
+  outputText?: string;
+};
+
 const LEGACY_STORAGE_KEY = "shift_writer_rows";
 const ACTIVE_WEEK_STORAGE_KEY = "shift_writer_active_week";
 const WEEKS_STORAGE_KEY = "shift_writer_weeks";
 const OUTPUT_STORAGE_KEY = "shift_writer_output";
+const FIRESTORE_DOC_ID = "shift_writer";
 const DAYS = ["domenica", "lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato"];
 const QUICK_LINKS = [
   {
@@ -186,22 +196,126 @@ function loadInitialOutput() {
   return "";
 }
 
+function saveLocalState(weekStart: string, rows: ShiftRow[], outputText: string) {
+  const archive = loadWeeksArchive();
+  archive[weekStart] = rows;
+  localStorage.setItem(ACTIVE_WEEK_STORAGE_KEY, weekStart);
+  localStorage.setItem(WEEKS_STORAGE_KEY, JSON.stringify(archive));
+  localStorage.setItem(OUTPUT_STORAGE_KEY, outputText);
+  return archive;
+}
+
+function applySyncedData(data: DashboardSyncDoc) {
+  const nextWeekStart = data.activeWeek || getNextMonday();
+  const nextArchive = data.weeks || {};
+  const nextRows = nextArchive[nextWeekStart] || createWeek(nextWeekStart);
+  const nextOutput = data.outputText || "";
+
+  localStorage.setItem(ACTIVE_WEEK_STORAGE_KEY, nextWeekStart);
+  localStorage.setItem(WEEKS_STORAGE_KEY, JSON.stringify(nextArchive));
+  localStorage.setItem(OUTPUT_STORAGE_KEY, nextOutput);
+
+  return { nextWeekStart, nextRows, nextOutput };
+}
+
 export default function DashboardPage() {
   const [weekStart, setWeekStart] = useState(loadInitialWeekStart);
   const [rows, setRows] = useState<ShiftRow[]>(loadInitialRows);
   const [outputText, setOutputText] = useState(loadInitialOutput);
   const [copied, setCopied] = useState(false);
+  const uidRef = useRef<string | null>(null);
+  const remoteReadyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestStateRef = useRef({ weekStart, rows, outputText });
   const weeklyTotalMinutes = rows.reduce((total, row) => total + rowMinutes(row), 0);
+
+  latestStateRef.current = { weekStart, rows, outputText };
 
   useEffect(() => {
     try {
-      const archive = loadWeeksArchive();
-      archive[weekStart] = rows;
-      localStorage.setItem(ACTIVE_WEEK_STORAGE_KEY, weekStart);
-      localStorage.setItem(WEEKS_STORAGE_KEY, JSON.stringify(archive));
-      localStorage.setItem(OUTPUT_STORAGE_KEY, outputText);
+      const archive = saveLocalState(weekStart, rows, outputText);
+      const uid = uidRef.current;
+      const db = getFirestoreDb();
+      if (!uid || !db || !remoteReadyRef.current) return;
+
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        setDoc(
+          doc(db, "users", uid, "private", FIRESTORE_DOC_ID),
+          {
+            activeWeek: weekStart,
+            weeks: archive,
+            outputText,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        ).catch((error) => console.error("Salvataggio turni fallito:", error));
+      }, 500);
     } catch {}
   }, [rows, outputText, weekStart]);
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const db = getFirestoreDb();
+    if (!auth || !db) return;
+
+    let unsubscribeSnapshot: (() => void) | undefined;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = undefined;
+      }
+
+      uidRef.current = user?.uid ?? null;
+      remoteReadyRef.current = false;
+
+      if (!user) return;
+
+      const ref = doc(db, "users", user.uid, "private", FIRESTORE_DOC_ID);
+      const snapshot = await getDoc(ref);
+
+      if (snapshot.exists()) {
+        const { nextWeekStart, nextRows, nextOutput } = applySyncedData(
+          snapshot.data() as DashboardSyncDoc
+        );
+        setWeekStart(nextWeekStart);
+        setRows(nextRows);
+        setOutputText(nextOutput);
+      } else {
+        const current = latestStateRef.current;
+        const archive = saveLocalState(current.weekStart, current.rows, current.outputText);
+        await setDoc(
+          ref,
+          {
+            activeWeek: current.weekStart,
+            weeks: archive,
+            outputText: current.outputText,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      }
+
+      remoteReadyRef.current = true;
+
+      unsubscribeSnapshot = onSnapshot(ref, (remoteSnapshot) => {
+        if (!remoteSnapshot.exists()) return;
+        const { nextWeekStart, nextRows, nextOutput } = applySyncedData(
+          remoteSnapshot.data() as DashboardSyncDoc
+        );
+        setWeekStart(nextWeekStart);
+        setRows(nextRows);
+        setOutputText(nextOutput);
+      });
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   const updateRow = <K extends keyof ShiftRow>(index: number, key: K, value: ShiftRow[K]) => {
     setCopied(false);
@@ -263,16 +377,16 @@ export default function DashboardPage() {
   return (
     <RequireAuth>
       <main className="min-h-dvh bg-[#f6f2ea] text-[#1f2933]">
-        <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mx-auto grid w-full max-w-6xl gap-5 px-3 py-4 sm:px-4 sm:py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <section className="rounded-lg border border-[#d7cfc0] bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5ded2] px-4 py-3">
+            <div className="grid gap-3 border-b border-[#e5ded2] px-4 py-3 xl:flex xl:items-center xl:justify-between">
               <div>
                 <h1 className="text-xl font-bold">Dashboard Orari</h1>
                 <p className="text-sm text-[#667085]">Compila la settimana e copia il testo pronto.</p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="text-sm font-medium text-[#475467]" htmlFor="week-start">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                <label className="col-span-2 text-sm font-medium text-[#475467] sm:col-span-1" htmlFor="week-start">
                   Inizio
                 </label>
                 <input
@@ -280,7 +394,7 @@ export default function DashboardPage() {
                   type="date"
                   value={weekStart}
                   onChange={(event) => openWeek(event.target.value)}
-                  className="h-10 rounded-md border border-[#c9c1b4] bg-white px-3 text-sm"
+                  className="col-span-2 h-10 rounded-md border border-[#c9c1b4] bg-white px-3 text-sm sm:col-span-1"
                 />
                 <button
                   type="button"
@@ -300,7 +414,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="text-sm">
-              <div className="grid grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] gap-3 bg-[#f8f4ed] px-4 py-3 font-semibold text-[#475467]">
+              <div className="hidden grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] gap-3 bg-[#f8f4ed] px-4 py-3 font-semibold text-[#475467] md:grid">
                 <div>Giorno</div>
                 <div>Casa</div>
                 <div>Entrata</div>
@@ -316,9 +430,9 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={row.date}
-                    className="grid grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] items-center gap-3 border-t border-[#eee7dc] px-4 py-3"
+                    className="grid grid-cols-2 items-end gap-3 border-t border-[#eee7dc] px-4 py-4 md:grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] md:items-center md:py-3"
                   >
-                    <div>
+                    <div className="col-span-2 md:col-span-1">
                       <div className="font-semibold">{dayLabel}</div>
                       <input
                         type="date"
@@ -336,17 +450,21 @@ export default function DashboardPage() {
                       />
                       casa
                     </label>
-                    {(["startA", "endA", "startB", "endB"] as const).map((key) => (
-                      <input
-                        key={key}
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="--"
-                        value={row[key]}
-                        disabled={row.home}
-                        onChange={(event) => updateRow(index, key, event.target.value)}
-                        className="h-10 w-full min-w-0 rounded-md border border-[#d7cfc0] bg-white px-2 disabled:bg-[#f2eee7] disabled:text-[#98a2b3]"
-                      />
+                    {(["startA", "endA", "startB", "endB"] as const).map((key, fieldIndex) => (
+                      <label key={key} className="grid gap-1">
+                        <span className="text-xs font-semibold text-[#667085] md:hidden">
+                          {fieldIndex % 2 === 0 ? "Entrata" : "Uscita"}
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="--"
+                          value={row[key]}
+                          disabled={row.home}
+                          onChange={(event) => updateRow(index, key, event.target.value)}
+                          className="h-10 w-full min-w-0 rounded-md border border-[#d7cfc0] bg-white px-2 disabled:bg-[#f2eee7] disabled:text-[#98a2b3]"
+                        />
+                      </label>
                     ))}
                   </div>
                 );
@@ -381,7 +499,7 @@ export default function DashboardPage() {
                   setCopied(false);
                   setOutputText(event.target.value);
                 }}
-                className="min-h-[430px] w-full resize-none bg-[#fbfaf7] p-4 font-mono text-sm leading-6 outline-none"
+                className="min-h-[260px] w-full resize-none bg-[#fbfaf7] p-4 font-mono text-sm leading-6 outline-none lg:min-h-[430px]"
               />
             </aside>
 
@@ -389,7 +507,7 @@ export default function DashboardPage() {
               <div className="border-b border-[#e5ded2] px-4 py-3">
                 <h2 className="font-bold">Collegamenti</h2>
               </div>
-              <div className="grid grid-cols-2 gap-2 p-4">
+              <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 lg:grid-cols-2">
                 {QUICK_LINKS.map((link) => (
                   <a
                     key={link.label}
