@@ -40,57 +40,41 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   }, [router]);
 
   if (user === undefined && !denied) {
-    return <div style={{ padding: 16 }}>Caricamento…</div>;
+    return <div className="p-4 text-sm text-slate-700">Caricamento...</div>;
   }
 
   if (denied) {
     return (
-      <div style={{ padding: 32, textAlign: "center" }}>
-        <h2>Accesso negato</h2>
-        <p>Questo account non è autorizzato a visualizzare la dashboard.</p>
+      <div className="grid min-h-dvh place-items-center bg-[#f6f2ea] p-8 text-center text-[#1f2933]">
+        <div className="rounded-lg border border-[#d7cfc0] bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Accesso negato</h2>
+          <p className="mt-2 text-sm text-[#667085]">
+            Questo account non e autorizzato a visualizzare la dashboard.
+          </p>
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: 12,
-          borderBottom: "1px solid #eee"
-        }}
-      >
+      <div className="flex items-center gap-3 border-b border-[#e5ded2] bg-white px-4 py-3 text-sm text-[#1f2933]">
         {user.photoURL ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={user.photoURL}
-            width={32}
-            height={32}
-            style={{ borderRadius: 999 }}
-            alt=""
-          />
+          <img src={user.photoURL} width={32} height={32} className="rounded-full" alt="" />
         ) : null}
 
-        <div style={{ flex: 1 }}>{user.displayName ?? user.email}</div>
+        <div className="min-w-0 flex-1 truncate">{user.displayName ?? user.email}</div>
 
         <button
+          type="button"
           onClick={() => {
             const auth = getFirebaseAuth();
             if (auth) signOut(auth);
           }}
-          style={{
-            padding: "6px 10px",
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            cursor: "pointer"
-          }}
+          className="h-9 rounded-md border border-[#c9c1b4] bg-white px-3 font-semibold hover:bg-[#f8f4ed]"
         >
           Esci
         </button>

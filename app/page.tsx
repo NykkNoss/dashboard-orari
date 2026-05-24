@@ -31,22 +31,20 @@ export default function Home() {
       style={{
         backgroundImage: "url('/home-bg.jpg')",
         backgroundSize: "cover",
-        backgroundPosition: "center",
+        backgroundPosition: "center"
       }}
     >
-      {/* overlay per contrasto */}
       <div className="absolute inset-0 bg-black/40" />
 
-      {/* card centrale */}
-      <div className="relative z-10 w-[min(92vw,520px)] bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-white/50 p-6 text-gray-900 text-center">
-        <h1 className="text-2xl font-bold mb-2">Benvenuto</h1>
+      <div className="relative z-10 w-[min(92vw,520px)] rounded-lg border border-white/50 bg-white/95 p-6 text-center text-gray-900 shadow-xl backdrop-blur">
+        <h1 className="mb-2 text-2xl font-bold">Dashboard Orari</h1>
         <p className="text-sm text-gray-600 mb-5 text-center">
-          Accedi per entrare nella tua dashboard.
+          Accedi e prepara il testo dei tuoi turni da copiare.
         </p>
 
         <button
           onClick={handleLogin}
-          className="w-full py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 font-semibold"
+          className="w-full rounded-md border border-gray-300 bg-white py-3 font-semibold hover:bg-gray-50"
         >
           Accedi
         </button>
