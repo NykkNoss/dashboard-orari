@@ -414,13 +414,13 @@ export default function DashboardPage() {
             </div>
 
             <div className="text-sm">
-              <div className="hidden grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] gap-3 bg-[#f8f4ed] px-4 py-3 font-semibold text-[#475467] md:grid">
+              <div className="grid grid-cols-[72px_34px_repeat(4,minmax(34px,1fr))] gap-1 bg-[#f8f4ed] px-2 py-2 text-xs font-semibold text-[#475467] md:grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] md:gap-3 md:px-4 md:py-3 md:text-sm">
                 <div>Giorno</div>
-                <div>Casa</div>
-                <div>Entrata</div>
-                <div>Uscita</div>
-                <div>Entrata</div>
-                <div>Uscita</div>
+                <div className="text-center md:text-left">C</div>
+                <div className="text-center md:text-left">E1</div>
+                <div className="text-center md:text-left">U1</div>
+                <div className="text-center md:text-left">E2</div>
+                <div className="text-center md:text-left">U2</div>
               </div>
 
               {rows.map((row, index) => {
@@ -430,31 +430,28 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={row.date}
-                    className="grid grid-cols-2 items-end gap-3 border-t border-[#eee7dc] px-4 py-4 md:grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] md:items-center md:py-3"
+                    className="grid grid-cols-[72px_34px_repeat(4,minmax(34px,1fr))] items-center gap-1 border-t border-[#eee7dc] px-2 py-2 md:grid-cols-[minmax(118px,1.5fr)_80px_repeat(4,minmax(58px,1fr))] md:gap-3 md:px-4 md:py-3"
                   >
-                    <div className="col-span-2 md:col-span-1">
-                      <div className="font-semibold">{dayLabel}</div>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-bold md:text-sm">{dayLabel}</div>
                       <input
                         type="date"
                         value={row.date}
                         onChange={(event) => updateRow(index, "date", event.target.value)}
-                        className="mt-1 h-9 w-full rounded-md border border-[#d7cfc0] px-2 text-sm text-[#667085]"
+                        className="mt-1 hidden h-9 w-full rounded-md border border-[#d7cfc0] px-2 text-sm text-[#667085] md:block"
                       />
                     </div>
-                    <label className="inline-flex h-10 items-center gap-2 rounded-md border border-[#d7cfc0] px-3 font-medium">
+                    <label className="inline-flex h-9 items-center justify-center rounded-md border border-[#d7cfc0] font-medium md:h-10 md:justify-start md:gap-2 md:px-3">
                       <input
                         type="checkbox"
                         checked={row.home}
                         onChange={(event) => updateRow(index, "home", event.target.checked)}
-                        className="h-4 w-4 accent-[#2364aa]"
+                        className="h-4 w-4 shrink-0 accent-[#2364aa]"
                       />
-                      casa
+                      <span className="hidden md:inline">casa</span>
                     </label>
-                    {(["startA", "endA", "startB", "endB"] as const).map((key, fieldIndex) => (
-                      <label key={key} className="grid gap-1">
-                        <span className="text-xs font-semibold text-[#667085] md:hidden">
-                          {fieldIndex % 2 === 0 ? "Entrata" : "Uscita"}
-                        </span>
+                    {(["startA", "endA", "startB", "endB"] as const).map((key) => (
+                      <label key={key} className="min-w-0">
                         <input
                           type="text"
                           inputMode="decimal"
@@ -462,7 +459,7 @@ export default function DashboardPage() {
                           value={row[key]}
                           disabled={row.home}
                           onChange={(event) => updateRow(index, key, event.target.value)}
-                          className="h-10 w-full min-w-0 rounded-md border border-[#d7cfc0] bg-white px-2 disabled:bg-[#f2eee7] disabled:text-[#98a2b3]"
+                          className="h-9 w-full min-w-0 rounded-md border border-[#d7cfc0] bg-white px-1 text-center text-sm disabled:bg-[#f2eee7] disabled:text-[#98a2b3] md:h-10 md:px-2 md:text-left"
                         />
                       </label>
                     ))}
